@@ -119,7 +119,7 @@ Audience: ${audience || 'general'}.
       ],
     });
 
-    const pitch = aiRes.choices?.[0]?.message?.content.trim() || '';
+    const pitch = aiRes.choices?.[0]?.message?.content?.trim() ?? '';
     return res.status(200).json({ pitch });
   } catch (err: any) {
     console.error('💥 API handler error:', err);
