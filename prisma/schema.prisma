@@ -1,0 +1,18 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model PitchHistory {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  jobTitle  String
+  purpose   String
+  focusArea String
+  audience  String
+  pitch     String            // the AI-generated text
+}
