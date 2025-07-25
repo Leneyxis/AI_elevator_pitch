@@ -1,11 +1,27 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Star, Copy, Download, Sparkles } from 'lucide-react';
 
 export default function ResultPanel({ pitch }: { pitch: string }) {
   const [copied, setCopied] = useState(false);
   const [liked, setLiked]   = useState(false);
+  const [displayed, setDisplayed] = useState('');
+
+  useEffect(() => {
+    if (!pitch) {
+      setDisplayed('');
+      return;
+    }
+    let i = 0;
+    setDisplayed('');
+    const interval = setInterval(() => {
+      setDisplayed(pitch.slice(0, i));
+      i++;
+      if (i > pitch.length) clearInterval(interval);
+    }, 18); // adjust speed here
+    return () => clearInterval(interval);
+  }, [pitch]);
 
   const handleCopy = async () => {
     if (!pitch) return;
@@ -80,8 +96,11 @@ export default function ResultPanel({ pitch }: { pitch: string }) {
       <div className="flex-1 p-6 overflow-auto">
         {pitch ? (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-            <pre className="whitespace-pre-wrap text-slate-700 leading-relaxed font-medium">
-              {pitch}
+            <pre className="whitespace-pre-wrap text-slate-700 leading-relaxed font-medium animate-fade-in">
+              {displayed}
+              {pitch && displayed.length < pitch.length && (
+                <span className="animate-blink">|</span>
+              )}
             </pre>
           </div>
         ) : (
