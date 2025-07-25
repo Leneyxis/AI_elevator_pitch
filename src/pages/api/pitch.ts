@@ -54,9 +54,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       length:            Array.isArray(fields.length)            ? String(fields.length[0])            : String(fields.length    ?? ''),
     };
 
-    console.log('▶️ Coerced input:', input);
-    console.log('▶️ Received files:', files);
-
     // ── 3) validate with Zod ──────────────────────────────────────────────
     const result = BodySchema.safeParse(input);
     if (!result.success) {
@@ -112,15 +109,20 @@ Audience: ${audience || 'general'}.
 
     // ── 6) call Azure OpenAI ─────────────────────────────────────────────
     const aiRes = await client.chat.completions.create({
-      model:    modelName,
+      model: modelName,
       messages: [
         { role: 'system', content: 'You are an expert career writer.' },
         { role: 'user',   content: prompt },
       ],
+      stream: true, // <-- Enable streaming
     });
 
-    const pitch = aiRes.choices?.[0]?.message?.content.trim() || '';
-    return res.status(200).json({ pitch });
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    for await (const chunk of aiRes) {
+      res.write(chunk.choices?.[0]?.delta?.content ?? '');
+      // Optionally flush if supported
+    }
+    res.end();
   } catch (err: any) {
     console.error('💥 API handler error:', err);
     return res.status(500).json({ error: err.message || 'Server error' });

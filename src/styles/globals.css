@@ -16,4 +16,18 @@ body {
   animation: pop 0.4s cubic-bezier(.25,.8,.25,1) both;
 }
 
-/* any global overrides below */
+/* Add to your CSS */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+.animate-fade-in {
+  animation: fadeIn 0.5s;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

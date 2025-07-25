@@ -171,8 +171,20 @@ export default function PitchForm({
       if (profileSource === 'resume' && uploadedFile) {
         formData.append('resumeFile', uploadedFile);
       }
+      let pitch = '';
       const res = await fetch('/api/pitch', { method: 'POST', body: formData });
-      onSubmit(await res.json());
+      if (res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          pitch += decoder.decode(value);
+          onSubmit({ pitch }); // update ResultPanel as text streams in
+        }
+      } else {
+        onSubmit({ pitch: await res.text() });
+      }
     } catch (err) {
       console.error(err);
     } finally {
