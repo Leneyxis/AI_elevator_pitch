@@ -15,11 +15,16 @@ export const config = {
 };
 
 const BodySchema = z.object({
-  jobTitle:          z.string().trim().min(2),
-  purpose:           z.string().trim().min(2),
+  inputMode:         z.enum(['form', 'voice']).optional().default('form'),
+  // Form mode fields
+  jobTitle:          z.string().optional().default(''),
+  purpose:           z.string().optional().default(''),
   focusArea:         z.string().optional().default(''),
   audience:          z.string().optional().default(''),
   additionalContext: z.string().optional().default(''),
+  // Voice mode fields
+  voiceTranscription: z.string().optional().default(''),
+  // Common fields
   tone:              z.string().optional().default(''),
   length:            z.string().optional().default(''),
 });
@@ -45,11 +50,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // ── 2) flatten & coerce every incoming field to a string ─────────────
     const input = {
+      inputMode:         Array.isArray(fields.inputMode)         ? String(fields.inputMode[0])         : String(fields.inputMode ?? 'form'),
       jobTitle:          Array.isArray(fields.jobTitle)          ? String(fields.jobTitle[0])          : String(fields.jobTitle ?? ''),
       purpose:           Array.isArray(fields.purpose)           ? String(fields.purpose[0])           : String(fields.purpose  ?? ''),
       focusArea:         Array.isArray(fields.focusArea)         ? String(fields.focusArea[0])         : String(fields.focusArea ?? ''),
       audience:          Array.isArray(fields.audience)          ? String(fields.audience[0])          : String(fields.audience  ?? ''),
       additionalContext: Array.isArray(fields.additionalContext) ? String(fields.additionalContext[0]) : String(fields.additionalContext ?? ''),
+      voiceTranscription: Array.isArray(fields.voiceTranscription) ? String(fields.voiceTranscription[0]) : String(fields.voiceTranscription ?? ''),
       tone:              Array.isArray(fields.tone)              ? String(fields.tone[0])              : String(fields.tone      ?? ''),
       length:            Array.isArray(fields.length)            ? String(fields.length[0])            : String(fields.length    ?? ''),
     };
@@ -59,8 +66,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!result.success) {
       return res.status(422).json({ errors: result.error.errors });
     }
-    const { jobTitle, purpose, focusArea, audience, additionalContext, tone, length } =
+    const { inputMode, jobTitle, purpose, focusArea, audience, additionalContext, voiceTranscription, tone, length } =
       result.data;
+    
+    // ── 3.5) additional validation based on input mode ─────────────────────────
+    if (inputMode === 'voice') {
+      if (!voiceTranscription?.trim()) {
+        return res.status(422).json({ 
+          errors: [{ message: 'Voice transcription is required for voice mode', path: ['voiceTranscription'] }] 
+        });
+      }
+    } else {
+      if (!jobTitle?.trim() || !purpose?.trim()) {
+        return res.status(422).json({ 
+          errors: [{ message: 'Job title and purpose are required for form mode', path: ['jobTitle', 'purpose'] }] 
+        });
+      }
+    }
 
     // ── 4) extract resume text if a file was uploaded ────────────────────
     let resumeText = '';
@@ -94,18 +116,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // ── 5) build the prompt ────────────────────────────────────────────────
-    let prompt = `
+    // ── 5) build the prompt based on input mode ──────────────────────────────
+    let prompt = '';
+    
+    if (inputMode === 'voice') {
+      // Voice mode: generate pitch from transcription
+      prompt = `
+You are a career coaching assistant. Based on the following voice transcription from someone describing themselves, create a compelling ${length || 'medium-length'} elevator pitch.
+
+Voice transcription:
+"${voiceTranscription}"
+
+Instructions:
+- Extract key information about their background, skills, goals, and achievements
+- Structure it as a polished elevator pitch
+- Make it sound natural and conversational
+- Use a ${tone || 'professional'} tone
+- Target length: ${length === 'Short' ? '30-45 seconds' : length === 'Long' ? '2-3 minutes' : '60-90 seconds'}
+
+Return only the final elevator pitch text.`;
+    } else {
+      // Form mode: structured prompt
+      prompt = `
 You are a career‑coaching assistant.
 Generate a ${length || '60‑second'} elevator pitch for someone targeting ${jobTitle}.
 Purpose: ${purpose}.
 Focus area: ${focusArea || 'unspecified'}.
 Audience: ${audience || 'general'}.
 `;
-    const context = resumeText || additionalContext;
-    if (context) prompt += `Context (resume or notes):\n${context}\n`;
-    if (tone)    prompt += `Tone: ${tone}.\n`;
-    prompt += 'Return only the pitch text.';
+      const context = resumeText || additionalContext;
+      if (context) prompt += `Context (resume or notes):\n${context}\n`;
+      if (tone) prompt += `Tone: ${tone}.\n`;
+      prompt += 'Return only the pitch text.';
+    }
 
     // ── 6) call Azure OpenAI ─────────────────────────────────────────────
     const aiRes = await client.chat.completions.create({
